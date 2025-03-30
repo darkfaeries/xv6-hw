@@ -8,3 +8,12 @@ typedef unsigned int  uint32;
 typedef unsigned long uint64;
 
 typedef uint64 pde_t;
+
+enum procstatus {_SLEEPING, _RUNNABLE, _RUNNING, _ZOMBIE};
+
+struct procinfo {
+	int pid;
+	char name[16];
+	enum procstatus status;
+	int parent;
+};

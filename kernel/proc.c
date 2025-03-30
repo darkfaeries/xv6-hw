@@ -693,3 +693,74 @@ procdump(void)
     printf("\n");
   }
 }
+
+int
+ps_count_used(void)
+{
+	struct proc* p;
+	int count = 0;
+
+	for (p = proc; p < &proc[NPROC]; p++){
+		acquire(&p->lock);
+		// increment if the process is alive
+		if (p->state == SLEEPING || 
+			p->state == RUNNABLE ||
+			p->state == RUNNING ||
+			p->state == ZOMBIE) {
+			count++;
+		}
+		release(&p->lock);
+	}
+
+	return count;
+}
+
+// returns -1 for copyout failure,
+// number of procs if the limit wasn't reached,
+// -2 if it was reached
+int
+ps_routine(pagetable_t table, uint64 buf, int lim) {
+	struct proc* p;
+	struct procinfo info; // will be filled with process info and then copyouted
+	struct proc* parent;
+	int copied = 0;
+
+	for (p = proc; p < &proc[NPROC]; p++){
+		acquire(&p->lock);
+		if (p->state > ZOMBIE || p->state < SLEEPING) {
+			release(&p->lock);
+			continue;
+		}
+
+		// already copied lim processes and another one is present
+
+		if (copied == lim) {
+			release(&p->lock);
+			return -2;
+		}
+		
+		// getting process info into the procinfo buffer
+
+		info.pid = p->pid;
+		safestrcpy(info.name, p->name, 16);
+		info.status = p->state - 2;
+		acquire(&wait_lock);
+		parent = p->parent;
+		release(&wait_lock);
+		if (!parent) info.parent = -1;
+		else {
+			acquire(&parent->lock);
+			info.parent = parent->pid;
+			release(&parent->lock);
+		}
+
+		release(&p->lock);
+
+		// copying the info
+		if (copyout(table, buf + copied * sizeof(struct procinfo), (char*)&info, sizeof(struct procinfo)) == -1) return -1;
+		copied++;
+	}
+
+	// end of loop reached, all the processes accounted for
+	return copied;
+}
