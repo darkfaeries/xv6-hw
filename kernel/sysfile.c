@@ -335,10 +335,12 @@ sys_open(void)
     }
   }
 
-  if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
-    iunlockput(ip);
-    end_op();
-    return -1;
+  if(ip->type == T_DEVICE){
+  	if ((ip->major < 0 || ip->major >= NDEV) || (ip->minor < 0 || ip->minor >= NMINOR)) {
+  	  iunlockput(ip);
+      end_op();
+      return -1;
+  	}
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
@@ -352,6 +354,7 @@ sys_open(void)
   if(ip->type == T_DEVICE){
     f->type = FD_DEVICE;
     f->major = ip->major;
+    f->minor = ip->minor;
   } else {
     f->type = FD_INODE;
     f->off = 0;
