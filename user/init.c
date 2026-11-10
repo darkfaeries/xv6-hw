@@ -25,22 +25,10 @@ main(void)
   dup(0);  // stderr
 
   // create symbolic devices
-  if (open("null", O_RDWR) < 0) {
-  	mknod("null", SYMBOLIC, _NULL);
-  	open("null", O_RDWR);
-  }
-  if (open("zero", O_RDWR) < 0) {
-  	mknod("zero", SYMBOLIC, _ZERO);
-  	open("zero", O_RDWR);
-  }
-  if (open("urandom", O_RDWR) < 0) {
-  	mknod("urandom", SYMBOLIC, _URANDOM);
-  	open("urandom", O_RDWR);
-  }
-  if (open("nullstat", O_RDWR) < 0) {
-  	mknod("nullstat", SYMBOLIC, _NULLSTAT);
-  	open("nullstat", O_RDWR);
-  }
+  mknod("null", SYMBOLIC, _NULL);
+  mknod("zero", SYMBOLIC, _ZERO);
+  mknod("urandom", SYMBOLIC, _URANDOM);
+  mknod("nullstat", SYMBOLIC, _NULLSTAT);
 
   for(;;){
     printf("init: starting sh\n");

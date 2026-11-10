@@ -1,118 +1,78 @@
 #include "kernel/types.h"
-#include "kernel/stat.h"
+#include "kernel/fcntl.h"
 #include "user/user.h"
 
-#define DATA_SIZE 64
-#define STRING_SIZE 8
+#define DATA_SIZE 513
+
+static void
+check(char* test, int actual, int expected) {
+	printf("%s (should be %d): %d\n", test, expected, actual);
+	if (actual != expected) {
+		fprintf(2, "FAILED: %s\n", test);
+		exit(1);
+	}
+}
 
 int
 main(int argc, char* argv[]) {
+	unsigned char buf[DATA_SIZE];
+	memset(buf, 42, sizeof(buf));
 	printf("testing utility started\n");
 
 	printf("testing device NULL\n");
-	printf("===============================\n");
-	printf("testing read from null:\n");
-	char* buf = malloc(DATA_SIZE);
-	int null = open("null", 2);
-
-	int res = read(null, buf, DATA_SIZE);
-	printf("read result (should be zero): %d\n", res);
-	printf("-------------------------------\n");
-	printf("testing write to null:\n");
-
-	res = write(null, buf, 4321948);
-	printf("write result (should be 4321948): %d\n", res);
-	printf("===============================\n");
-
-
+    printf("===============================\n");
+	int null = open("null", O_RDWR);
+	check("read from null (EOF)", read(null, buf, DATA_SIZE), 0);
+	check("first byte after EOF", buf[0], 42);
+	check("write to null", write(null, buf, DATA_SIZE), DATA_SIZE);
+	close(null);
 
 	printf("testing device ZERO\n");
-	printf("===============================\n");
-	printf("testing read from zero:\n");
-	int zero = open("zero", 2);
-
-	res = read(zero, buf, DATA_SIZE);
-	printf("read result (should be DATA_SIZE): %d\n", res);
-	printf("bytes from device zero:\n");
-
-	for (int i = 0; i < STRING_SIZE; i++) {
-		for (int j = 0; j < DATA_SIZE / STRING_SIZE; ++j)
-		{
-			printf("%x ", buf[i * STRING_SIZE + j]);
+    printf("===============================\n");
+	int zero = open("zero", O_RDWR);
+	printf("testing read from zero across the 128-byte buffer boundary\n");
+	check("bytes read", read(zero, buf, DATA_SIZE), DATA_SIZE);
+	int nonzero = 0;
+	for (int i = 0; i < DATA_SIZE; i++) {
+		if (buf[i] != 0) {
+			nonzero++;
 		}
-		printf("\n");
 	}
-
-	printf("-------------------------------\n");
-	printf("testing write to zero:\n");
-
-	res = write(zero, buf, 4321948);
-	printf("write result (should be -1): %d\n", res);
-	printf("===============================\n");
-
+	check("nonzero bytes", nonzero, 0);
+	check("write to zero", write(zero, buf, 1), -1);
+	close(zero);
 
 	printf("testing device URANDOM\n");
-	printf("===============================\n");
-	printf("testing read from urandom (default seed):\n");
-	int urandom = open("urandom", 2);
-
-	res = read(urandom, buf, DATA_SIZE);
-	printf("read result (should be DATA_SIZE): %d\n", res);
-	printf("bytes from device urandom:\n");
-
-	for (int i = 0; i < STRING_SIZE; i++) {
-		for (int j = 0; j < DATA_SIZE / STRING_SIZE; ++j)
-		{
-			printf("%x ", buf[i * STRING_SIZE + j]);
-		}
-		printf("\n");
-	}
-
-	printf("-------------------------------\n");
-	printf("testing write to urandom with bad size:\n");
-
-	res = write(urandom, buf, 5);
-	printf("write result (should be -1): %d\n", res);
-
-	printf("-------------------------------\n");
-	printf("testing write to urandom with good size:\n");
+    printf("===============================\n");
+	int urandom = open("urandom", O_RDWR);
 	unsigned char seed = 42;
-	res = write(urandom, &seed, 1);
-	printf("write result (should be 1, seed updated): %d\n", res);
-	printf("===============================\n");
-
+	check("write with bad seed size", write(urandom, buf, 2), -1);
+	check("write seed 42", write(urandom, &seed, sizeof(seed)), sizeof(seed));
+	check("bytes read from urandom", read(urandom, buf, DATA_SIZE), DATA_SIZE);
+	int mismatches = 0;
+	for (int i = 0; i < DATA_SIZE; i++) {
+		seed = seed * 13 + 27;
+		if (buf[i] != seed) {
+			mismatches++;
+		}
+	}
+	check("bytes differing from the sequence for seed 42", mismatches, 0);
+	close(urandom);
 
 	printf("testing device NULLSTAT\n");
-	printf("===============================\n");
-	printf("testing read from nullstat before writing:\n");
-	int nullstat = open("nullstat", 2);
+    printf("===============================\n");
+	int nullstat = open("nullstat", O_RDWR);
+	uint64 before, after;
+	check("read count before writing", read(nullstat, &before, sizeof(before)), sizeof(before));
+	check("write to nullstat", write(nullstat, buf, DATA_SIZE), DATA_SIZE);
+	check("read count after writing", read(nullstat, &after, sizeof(after)), sizeof(after));
+	printf("counter increase (should be %d): %lu\n", DATA_SIZE, after - before);
+	if (after - before != DATA_SIZE) {
+		exit(1);
+	}
+	check("read count with bad size", read(nullstat, buf, 1), -1);
+	close(nullstat);
 
-	uint64 nullstat_count = 0;
-	res = read(nullstat, &nullstat_count, sizeof(uint64));
-	printf("read result (should be sizeof(uint64)): %d\n", res);
-	printf("nullstat_count (should be 0): %d\n", (int)nullstat_count);
-
-	printf("-------------------------------\n");
-	printf("testing write to nullstat:\n");
-
-	res = write(nullstat, buf, DATA_SIZE);
-	printf("write result (should be DATA_SIZE): %d\n", res);
-
-	printf("-------------------------------\n");
-	printf("testing read from nullstat after writing:\n");
-
-	res = read(nullstat, &nullstat_count, sizeof(uint64));
-	printf("read result (should be sizeof(uint64)): %d\n", res);
-	printf("nullstat_count (should be DATA_SIZE): %d\n", (int)nullstat_count);
-
-	printf("-------------------------------\n");
-	printf("testing read from nullstat with bad size:\n");
-
-	res = read(nullstat, buf, DATA_SIZE);
-	printf("read result (should be -1): %d\n", res);
-	printf("===============================\n");
-
-
-	printf("testing finished\n");
+	printf("testing finished: OK\n");
 	return 0;
 }

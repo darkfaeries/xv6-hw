@@ -140,6 +140,7 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+	$U/_hex_dump\
 	$U/_symdev_test
 
 fs.img: mkfs/mkfs README $(UPROGS)

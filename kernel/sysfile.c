@@ -396,9 +396,13 @@ sys_mknod(void)
   char path[MAXPATH];
   int major, minor;
 
-  begin_op();
   argint(1, &major);
   argint(2, &minor);
+  // Validate syscall arguments before create() narrows them to short.
+  if (major < 0 || major >= NDEV || minor < 0 || minor >= NMINOR) {
+    return -1;
+  }
+  begin_op();
   if((argstr(0, path, MAXPATH)) < 0 ||
      (ip = create(path, T_DEVICE, major, minor)) == 0){
     end_op();
